@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOSS DD-3 Studio Delay + Pro Noise Control</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1115;
+      color: #f3f4f6;
+      display: flex;
+      justify-content: center;
+      padding: 22px 14px;
+      margin: 0;
+    }
+    .pedal {
+      background: linear-gradient(160deg, #f8fafc 0%, #e2e8f0 100%);
+      color: #0f172a;
+      width: 100%;
+      max-width: 430px;
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.65);
+      border: 2px solid #cbd5e1;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    h2 { margin: 0; color: #005fa8; font-size: 19px; letter-spacing: 0.4px; }
+    .led {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #ef4444; box-shadow: 0 0 10px #ef4444;
+    }
+    .led.off { background: #64748b; box-shadow: none; }
+    .box {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      padding: 13px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+    .box-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .box-title {
+      font-size: 11.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #475569;
+    }
+    label {
+      display: flex; justify-content: space-between;
+      font-weight: 700; font-size: 12.5px; margin-bottom: 4px; color: #334155;
+    }
+    input[type="range"] { width: 100%; margin-bottom: 8px; accent-color: #005fa8; }
+    input[type="file"] { width: 100%; font-size: 13px; margin-bottom: 8px; }
+    .row { display: flex; gap: 8px; }
+    button {
+      flex: 1; padding: 10px; border: none; border-radius: 8px;
+      font-weight: 700; font-size: 13px; cursor: pointer; transition: 0.15s;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: #005fa8; color: #fff; }
+    .btn-green { background: #059669; color: #fff; }
+    .btn-mic { background: #4f46e5; color: #fff; }
+    .btn-mic.active { background: #dc2626; }
+    .btn-sub { background: #e2e8f0; color: #1e293b; padding: 7px 4px; font-size: 12px; }
+    .btn-sub.active { background: #005fa8; color: #fff; }
+    .tempo-display {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px;
+    }
+    .bpm-num { font-size: 25px; font-weight: 800; color: #005fa8; font-family: monospace; }
+    .badge {
+      font-size: 11px; font-weight: 700; padding: 3px 9px;
+      border-radius: 20px; background: #dcfce7; color: #166534;
+    }
+    .badge.scanning { background: #fef3c7; color: #92400e; }
+    .badge.off { background: #e2e8f0; color: #475569; }
+    .meter-track {
+      width: 100%;
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #10b981, #005fa8);
+      transition: width 0.08s ease-out;
+    }
+    .btn-footswitch {
+      width: 100%; padding: 14px; background: #1e293b; color: #fff;
+      font-size: 15px; letter-spacing: 1px; border-radius: 10px; margin-top: 4px;
+    }
+    .btn-footswitch.active { background: #dc2626; }
+  </style>
+</head>
+<body>
+  <div class="pedal">
+    <div class="header">
+      <h2>BOSS DD-3 STUDIO DELAY</h2>
+      <div class="led" id="led"></div>
+    </div>
+
+    <!-- 1. Audio Source -->
+    <div class="box">
+      <div class="box-header">
+        <span class="box-title">1. Audio Input</span>
+      </div>
+      <input type="file" id="audioFile" accept="audio/*">
+      <div class="row">
+        <button class="btn-primary" id="playBtn" disabled>&#9654; Play / Pause</button>
+        <button class="btn-green" id="grooveBtn">&#9835; Test Groove</button>
+        <button class="btn-mic" id="micBtn">&#127908; Live Mic</button>
+      </div>
+      <audio id="player" crossorigin="anonymous"></audio>
+    </div>
+
+    <!-- 2. Studio Auto Noise Cancelling (Soft-Knee Adaptive Expander) -->
+    <div class="box">
+      <div class="box-header">
+        <span class="box-title">2. Pro Auto Noise Cancelling</span>
+        <label style="margin:0; gap:6px; align-items:center; cursor:pointer; font-size:12px;">
+          <input type="checkbox" id="nrToggle" checked> Enabled
+        </label>
+      </div>
+
+      <label>Noise Reduction Depth <span id="nrTxt">45% (Smooth)</span></label>
+      <input type="range" id="nrDepth" min="0" max="1" step="0.01" value="0.45">
+
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#64748b; font-weight:600;">
+        <span id="nrStatus">Adaptive Floor: Tracking...</span>
+        <span id="nrDb">Reduction: 0.0 dB</span>
+      </div>
+      <div class="meter-track">
+        <div class="meter-fill" id="nrMeter"></div>
+      </div>
+    </div>
+
+    <!-- 3. Smart Auto-Lock Tempo -->
+    <div class="box">
+      <div class="tempo-display">
+        <div>
+          <span class="bpm-num" id="bpmVal">120</span>
+          <span style="font-weight:700; font-size:13px;">BPM</span>
+        </div>
+        <span class="badge" id="lockStatus">READY</span>
+        <button class="btn-sub" id="resyncBtn" style="flex:0 0 auto; padding:5px 10px; background:#cbd5e1;">Re-Scan</button>
+      </div>
+
+      <div class="row">
+        <button class="btn-sub" data-mult="1.0">1/4 Note</button>
+        <button class="btn-sub active" data-mult="0.75">Dotted 1/8</button>
+        <button class="btn-sub" data-mult="0.5">1/8 Note</button>
+        <button class="btn-sub" id="tapBtn" style="background:#cbd5e1;">TAP</button>
+      </div>
+    </div>
+
+    <!-- 4. DD-3 Controls -->
+    <div class="box">
+      <label>E.LEVEL (Echo Mix) <span id="lvlTxt">50%</span></label>
+      <input type="range" id="level" min="0" max="0.85" step="0.01" value="0.50">
+
+      <label>F.BACK (Repeats) <span id="fbTxt">40%</span></label>
+      <input type="range" id="feedback" min="0" max="0.82" step="0.01" value="0.40">
+
+      <label>D.TIME (Delay Time) <span id="timeTxt">375 ms</span></label>
+      <input type="range" id="time" min="20" max="800" step="1" value="375">
+    </div>
+
+    <button class="btn-footswitch active" id="bypassBtn">PEDAL: ON</button>
+  </div>
+
+  <script>
+    let ctx, rawInputNode, cleanBusNode, dryGain, wetMaster, limiter;
+    let hiPass, lowPass, beatFilter, beatAnalyser;
+    let mediaSource = null, grooveTimer = null, micStream = null, micSource = null;
+
+    // Pro Studio Noise Cancelling Nodes (Pre-Delay Clean Stage)
+    let nrRumbleFilter, nrAirShelf, nrExpanderGain, nrAnalyser;
+    let adaptiveNoiseFloor = 0.008; // Dynamically learns room/tape hiss floor
+    let currentNrGain = 1.0;
+
+    // Dual-Buffer Crossfade Delay Lines
+    let delayA, delayB, fbA, fbB, outA, outB;
+    let activeBank = 'A';
+    let currentDelaySec = 0.375;
+
+    let effectOn = true;
+    let bpm = 120;
+    let subdivMult = 0.75;
+    let bpmLocked = false;
+    let kickIntervals = [];
+
+    function setupAudio() {
+      if (ctx) {
+        if (ctx.state === 'suspended') ctx.resume();
+        return;
+      }
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+      rawInputNode = ctx.createGain();
+      cleanBusNode = ctx.createGain();
+      dryGain = ctx.createGain();
+      wetMaster = ctx.createGain();
+
+      // --- STAGE 1: STUDIO NOISE CANCELLATION (BEFORE DELAY) ---
+      // 1A. Sub-sonic Rumble & AC Hum High-Pass (85Hz)
+      nrRumbleFilter = ctx.createBiquadFilter();
+      nrRumbleFilter.type = 'highpass';
+      nrRumbleFilter.frequency.value = 85;
+      nrRumbleFilter.Q.value = 0.7;
+
+      // 1B. Gentle High-Frequency Hiss Tamer (High-Shelf above 7.5kHz)
+      nrAirShelf = ctx.createBiquadFilter();
+      nrAirShelf.type = 'highshelf';
+      nrAirShelf.frequency.value = 7500;
+      nrAirShelf.gain.value = -3.0;
+
+      // 1C. Smooth Soft-Knee Downward Expander Gain Node (Never hard-cuts/chops audio)
+      nrExpanderGain = ctx.createGain();
+      nrExpanderGain.gain.value = 1.0;
+
+      nrAnalyser = ctx.createAnalyser();
+      nrAnalyser.fftSize = 1024;
+
+      // Connect Input -> Rumble Filter -> Hiss Shelf -> Soft Expander -> Clean Bus
+      rawInputNode.connect(nrRumbleFilter);
+      nrRumbleFilter.connect(nrAirShelf);
+      nrAirShelf.connect(nrAnalyser);
+      nrAirShelf.connect(nrExpanderGain);
+      nrExpanderGain.connect(cleanBusNode);
+
+      // --- STAGE 2: DD-3 DUAL-BUFFER CROSSFADE DELAY ---
+      hiPass = ctx.createBiquadFilter();
+      hiPass.type = 'highpass';
+      hiPass.frequency.value = 120;
+
+      lowPass = ctx.createBiquadFilter();
+      lowPass.type = 'lowpass';
+      lowPass.frequency.value = 5500;
+
+      limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -3.0;
+      limiter.knee.value = 10.0;
+      limiter.ratio.value = 12.0;
+      limiter.attack.value = 0.002;
+      limiter.release.value = 0.12;
+
+      delayA = ctx.createDelay(2.0);
+      fbA = ctx.createGain();
+      outA = ctx.createGain();
+      delayA.delayTime.value = currentDelaySec;
+      outA.gain.value = 1.0;
+
+      delayB = ctx.createDelay(2.0);
+      fbB = ctx.createGain();
+      outB = ctx.createGain();
+      delayB.delayTime.value = currentDelaySec;
+      outB.gain.value = 0.0;
+
+      // Dry path comes from cleanBusNode so both dry & echo are noise-cleaned
+      cleanBusNode.connect(dryGain);
+      dryGain.connect(limiter);
+
+      cleanBusNode.connect(hiPass);
+      hiPass.connect(lowPass);
+
+      lowPass.connect(delayA);
+      delayA.connect(fbA);
+      fbA.connect(delayA);
+      delayA.connect(outA);
+      outA.connect(wetMaster);
+
+      lowPass.connect(delayB);
+      delayB.connect(fbB);
+      fbB.connect(delayB);
+      delayB.connect(outB);
+      outB.connect(wetMaster);
+
+      wetMaster.connect(limiter);
+      limiter.connect(ctx.destination);
+
+      // Sidechain 140Hz Low-Pass for Kick Tempo Detection
+      beatFilter = ctx.createBiquadFilter();
+      beatFilter.type = 'lowpass';
+      beatFilter.frequency.value = 140;
+      beatAnalyser = ctx.createAnalyser();
+      beatAnalyser.fftSize = 512;
+      cleanBusNode.connect(beatFilter);
+      beatFilter.connect(beatAnalyser);
+
+      updateLevels();
+      updateNrControls();
+      startStudioNoiseCanceller();
+      startTempoScanner();
+    }
+
+    // --- STUDIO SOFT-KNEE ADAPTIVE NOISE CANCELLER (NO CHOPPY/KAT-KAT CUTS) ---
+    function startStudioNoiseCanceller() {
+      const buf = new Float32Array(nrAnalyser.fftSize);
+
+      setInterval(() => {
+        if (!ctx) return;
+        const enabled = document.getElementById('nrToggle').checked;
+        const depth = parseFloat(document.getElementById('nrDepth').value);
+        const now = ctx.currentTime;
+
+        if (!enabled || depth <= 0.01) {
+          nrExpanderGain.gain.setTargetAtTime(1.0, now, 0.04);
+          document.getElementById('nrStatus').textContent = 'Bypassed (Natural Pass-Through)';
+          document.getElementById('nrDb').textContent = 'Reduction: 0.0 dB';
+          document.getElementById('nrMeter').style.width = '0%';
+          return;
+        }
+
+        nrAnalyser.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        const rms = Math.sqrt(sum / buf.length);
+
+        // 1. Adaptively track minimum background noise floor slowly
+        if (rms > 0.0002) {
+          if (rms < adaptiveNoiseFloor) {
+            // Fast downward adaptation when quiet
+            adaptiveNoiseFloor = adaptiveNoiseFloor * 0.85 + rms * 0.15;
+          } else if (rms < adaptiveNoiseFloor * 2.2) {
+            // Very slow upward drift during steady room hiss
+            adaptiveNoiseFloor = adaptiveNoiseFloor * 0.992 + rms * 0.008;
+          }
+        }
+        adaptiveNoiseFloor = Math.max(0.0015, Math.min(0.04, adaptiveNoiseFloor));
+
+        // 2. Soft-Knee Downward Expansion (Never mutes to 0; max gentle attenuation -14dB)
+        const threshold = adaptiveNoiseFloor * (1.6 + depth * 2.4);
+        const minFloorGain = 1.0 - (depth * 0.78); // Keeps at least 22% ambience so voice never chops!
+
+        let targetGain = 1.0;
+        if (rms < threshold) {
+          // Smooth quadratic curve below threshold (Soft Knee)
+          const ratio = Math.max(0, rms / threshold);
+          const smoothCurve = ratio * ratio;
+          targetGain = minFloorGain + (1.0 - minFloorGain) * smoothCurve;
+        }
+
+        // 3. Asymmetric Studio Ballistics:
+        // Fast Attack (12ms) so word starts/transients NEVER get clipped!
+        // Slow Release (220ms) so word endings & guitar tails fade naturally without kat-kat!
+        const timeConstant = targetGain > currentNrGain ? 0.012 : 0.22;
+        currentNrGain = targetGain;
+        nrExpanderGain.gain.setTargetAtTime(targetGain, now, timeConstant);
+
+        // Update UI Telemetry
+        const dbReduction = 20 * Math.log10(Math.max(0.1, targetGain));
+        const reductionPct = Math.min(100, Math.round((1 - targetGain) * 140));
+        document.getElementById('nrStatus').textContent =
+          targetGain > 0.92 ? 'Signal Active (Open)' : 'Cleaning Background Hiss';
+        document.getElementById('nrDb').textContent = `Reduction: ${dbReduction.toFixed(1)} dB`;
+        document.getElementById('nrMeter').style.width = `${reductionPct}%`;
+      }, 20);
+    }
+
+    function updateNrControls() {
+      const enabled = document.getElementById('nrToggle').checked;
+      const depth = parseFloat(document.getElementById('nrDepth').value);
+      const pct = Math.round(depth * 100);
+      let label = 'Gentle';
+      if (pct > 70) label = 'Studio Deep';
+      else if (pct > 35) label = 'Balanced';
+      document.getElementById('nrTxt').textContent = enabled ? `${pct}% (${label})` : 'OFF';
+
+      if (ctx && nrRumbleFilter && nrAirShelf) {
+        const now = ctx.currentTime;
+        nrRumbleFilter.frequency.setTargetAtTime(enabled ? (65 + depth * 45) : 20, now, 0.05);
+        nrAirShelf.gain.setTargetAtTime(enabled ? (-depth * 6.5) : 0, now, 0.05);
+      }
+    }
+
+    // Glitch-Free Crossfade Switcher
+    function setCleanDelayTime(ms) {
+      if (!ctx) return;
+      const newSec = Math.max(0.02, Math.min(0.8, ms / 1000.0));
+      if (Math.abs(newSec - currentDelaySec) < 0.002) return;
+      currentDelaySec = newSec;
+
+      const now = ctx.currentTime;
+      const fadeTime = 0.045;
+      const fbVal = effectOn ? parseFloat(document.getElementById('feedback').value) : 0;
+
+      if (activeBank === 'A') {
+        delayB.delayTime.setValueAtTime(newSec, now);
+        fbB.gain.setValueAtTime(fbVal, now);
+
+        outA.gain.cancelScheduledValues(now);
+        outB.gain.cancelScheduledValues(now);
+        outA.gain.setValueAtTime(outA.gain.value, now);
+        outB.gain.setValueAtTime(outB.gain.value, now);
+        outA.gain.linearRampToValueAtTime(0.0, now + fadeTime);
+        outB.gain.linearRampToValueAtTime(1.0, now + fadeTime);
+
+        fbA.gain.setValueAtTime(0.0, now + fadeTime + 0.01);
+        activeBank = 'B';
+      } else {
+        delayA.delayTime.setValueAtTime(newSec, now);
+        fbA.gain.setValueAtTime(fbVal, now);
+
+        outA.gain.cancelScheduledValues(now);
+        outB.gain.cancelScheduledValues(now);
+        outA.gain.setValueAtTime(outA.gain.value, now);
+        outB.gain.setValueAtTime(outB.gain.value, now);
+        outB.gain.linearRampToValueAtTime(0.0, now + fadeTime);
+        outA.gain.linearRampToValueAtTime(1.0, now + fadeTime);
+
+        fbB.gain.setValueAtTime(0.0, now + fadeTime + 0.01);
+        activeBank = 'A';
+      }
+    }
+
+    function updateLevels() {
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const lvl = parseFloat(document.getElementById('level').value);
+      const fb = parseFloat(document.getElementById('feedback').value);
+
+      document.getElementById('lvlTxt').textContent = Math.round(lvl * 100) + '%';
+      document.getElementById('fbTxt').textContent = Math.round(fb * 100) + '%';
+
+      wetMaster.gain.setTargetAtTime(effectOn ? lvl : 0, now, 0.02);
+      if (activeBank === 'A') {
+        fbA.gain.setTargetAtTime(effectOn ? fb : 0, now, 0.02);
+        fbB.gain.setTargetAtTime(0, now, 0.02);
+      } else {
+        fbB.gain.setTargetAtTime(effectOn ? fb : 0, now, 0.02);
+        fbA.gain.setTargetAtTime(0, now, 0.02);
+      }
+    }
+
+    function applyBpmToDelay() {
+      let targetMs = (60000 / bpm) * subdivMult;
+      while (targetMs > 800) targetMs /= 2;
+      targetMs = Math.max(20, Math.round(targetMs));
+
+      document.getElementById('bpmVal').textContent = bpm;
+      document.getElementById('time').value = targetMs;
+      document.getElementById('timeTxt').textContent = targetMs + ' ms';
+      setCleanDelayTime(targetMs);
+    }
+
+    function resetTempoScan() {
+      bpmLocked = false;
+      kickIntervals = [];
+      const badge = document.getElementById('lockStatus');
+      badge.textContent = 'SCANNING BPM...';
+      badge.className = 'badge scanning';
+    }
+
+    function startTempoScanner() {
+      const buf = new Float32Array(beatAnalyser.fftSize);
+      let avgEnergy = 0;
+      let lastKick = 0;
+
+      setInterval(() => {
+        if (bpmLocked) return;
+        beatAnalyser.getFloatTimeDomainData(buf);
+
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        const rms = Math.sqrt(sum / buf.length);
+
+        const now = performance.now();
+        if (rms > 0.045 && rms > avgEnergy * 1.5 && (now - lastKick) > 310) {
+          if (lastKick > 0) {
+            const dt = now - lastKick;
+            if (dt >= 320 && dt <= 950) {
+              kickIntervals.push(dt);
+              if (kickIntervals.length >= 5) {
+                const sorted = [...kickIntervals].sort((a, b) => a - b);
+                const medianDt = sorted[Math.floor(sorted.length / 2)];
+                let detected = 60000 / medianDt;
+                while (detected < 78) detected *= 2;
+                while (detected > 152) detected /= 2;
+
+                bpm = Math.round(detected);
+                bpmLocked = true;
+                applyBpmToDelay();
+
+                const badge = document.getElementById('lockStatus');
+                badge.textContent = `LOCKED ${bpm} BPM`;
+                badge.className = 'badge';
+              }
+            }
+          }
+          lastKick = now;
+        }
+        avgEnergy = avgEnergy * 0.88 + rms * 0.12;
+      }, 25);
+    }
+
+    // File Upload
+    const player = document.getElementById('player');
+    document.getElementById('audioFile').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      setupAudio();
+      stopGroove();
+      player.src = URL.createObjectURL(file);
+      if (!mediaSource) {
+        mediaSource = ctx.createMediaElementSource(player);
+        mediaSource.connect(rawInputNode);
+      }
+      document.getElementById('playBtn').disabled = false;
+      resetTempoScan();
+      player.play();
+    });
+
+    document.getElementById('playBtn').addEventListener('click', () => {
+      setupAudio();
+      player.paused ? player.play() : player.pause();
+    });
+
+    // Live Mic Input (Great for testing Pro Noise Cancelling + Delay)
+    document.getElementById('micBtn').addEventListener('click', async function () {
+      setupAudio();
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+        this.classList.remove('active');
+        this.innerHTML = '&#127908; Live Mic';
+        return;
+      }
+      try {
+        // Disable aggressive browser gating so our smooth studio expander handles noise cleanly
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+        micSource = ctx.createMediaStreamSource(micStream);
+        micSource.connect(rawInputNode);
+        this.classList.add('active');
+        this.innerHTML = '&#9632; Stop Mic';
+        adaptiveNoiseFloor = 0.008;
+      } catch (err) {
+        alert('Microphone access denied or unavailable.');
+      }
+    });
+
+    // Built-in Test Groove
+    function stopGroove() {
+      if (grooveTimer) {
+        clearInterval(grooveTimer);
+        grooveTimer = null;
+        document.getElementById('grooveBtn').innerHTML = '&#9835; Test Groove';
+      }
+    }
+
+    document.getElementById('grooveBtn').addEventListener('click', () => {
+      setupAudio();
+      if (grooveTimer) { stopGroove(); return; }
+      player.pause();
+      document.getElementById('grooveBtn').innerHTML = '&#9632; Stop Groove';
+      resetTempoScan();
+
+      const testBpm = 115;
+      const stepMs = (60000 / testBpm) / 2;
+      const scale = [220, 261.63, 329.63, 392.0, 329.63, 293.66];
+      let step = 0;
+
+      const tick = () => {
+        const t = ctx.currentTime;
+        if (step % 2 === 0) {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.frequency.setValueAtTime(120, t);
+          osc.frequency.exponentialRampToValueAtTime(45, t + 0.11);
+          g.gain.setValueAtTime(0.45, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+          osc.connect(g); g.connect(rawInputNode);
+          osc.start(t); osc.stop(t + 0.16);
+        }
+        if (step % 4 === 0 || step % 4 === 3) {
+          const osc = ctx.createOscillator();
+          const filt = ctx.createBiquadFilter();
+          const g = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(scale[step % scale.length], t);
+          filt.type = 'lowpass';
+          filt.frequency.setValueAtTime(1800, t);
+          g.gain.setValueAtTime(0.28, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+          osc.connect(filt); filt.connect(g); g.connect(rawInputNode);
+          osc.start(t); osc.stop(t + 0.23);
+        }
+        step++;
+      };
+      tick();
+      grooveTimer = setInterval(tick, stepMs);
+    });
+
+    document.getElementById('nrToggle').addEventListener('change', () => { setupAudio(); updateNrControls(); });
+    document.getElementById('nrDepth').addEventListener('input', () => { setupAudio(); updateNrControls(); });
+
+    document.getElementById('resyncBtn').addEventListener('click', () => {
+      setupAudio();
+      resetTempoScan();
+    });
+
+    document.querySelectorAll('.btn-sub[data-mult]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.btn-sub[data-mult]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        subdivMult = parseFloat(btn.dataset.mult);
+        applyBpmToDelay();
+      });
+    });
+
+    let taps = [];
+    document.getElementById('tapBtn').addEventListener('click', () => {
+      setupAudio();
+      const now = performance.now();
+      taps.push(now);
+      if (taps.length > 4) taps.shift();
+      if (taps.length >= 2) {
+        const avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
+        if (avg > 280 && avg < 1200) {
+          bpm = Math.round(60000 / avg);
+          bpmLocked = true;
+          const badge = document.getElementById('lockStatus');
+          badge.textContent = `LOCKED ${bpm} BPM`;
+          badge.className = 'badge';
+          applyBpmToDelay();
+        }
+      }
+    });
+
+    document.getElementById('level').addEventListener('input', () => { setupAudio(); updateLevels(); });
+    document.getElementById('feedback').addEventListener('input', () => { setupAudio(); updateLevels(); });
+
+    document.getElementById('time').addEventListener('input', e => {
+      setupAudio();
+      bpmLocked = true;
+      const ms = parseInt(e.target.value, 10);
+      document.getElementById('timeTxt').textContent = ms + ' ms';
+      const badge = document.getElementById('lockStatus');
+      badge.textContent = 'MANUAL TIME';
+      badge.className = 'badge off';
+      setCleanDelayTime(ms);
+    });
+
+    document.getElementById('bypassBtn').addEventListener('click', function () {
+      setupAudio();
+      effectOn = !effectOn;
+      this.textContent = effectOn ? 'PEDAL: ON' : 'PEDAL: OFF';
+      this.classList.toggle('active', effectOn);
+      document.getElementById('led').classList.toggle('off', !effectOn);
+      updateLevels();
+    });
+  </script>
+</body>
+</html>
